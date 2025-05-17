@@ -1,0 +1,828 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Answer Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+        #result-section, #download-section {
+            display: none;
+        }
+        .font-large {
+            font-size: 150px;
+        }
+        #loader {
+            display: none;
+        }
+        .btn-primary {
+            background-color: #6c63ff;
+            border-color: #6c63ff;
+        }
+        .btn-primary:hover {
+            background-color: #5a52d6;
+            border-color: #5a52d6;
+        }
+        .header-bg {
+            background: linear-gradient(135deg, #6c63ff 0%, #4a42d1 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 20px 20px;
+        }
+        .preview-container {
+            height: 600px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+        }
+        .result-card {
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <header class="header-bg">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <h1>AI Question Generator</h1>
+                    <p class="lead">Upload your PDF and generate MCQs or Q&A pairs using Mistral 7B</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mb-5">
+        <section class="mb-4">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card p-4">
+                        <form id="upload-form">
+                            <div class="mb-3">
+                                <label for="pdf-file" class="form-label fw-bold">PDF Document</label>
+                                <input type="file" class="form-control" id="pdf-file" accept=".pdf" required>
+                                <div class="form-text">Please upload a PDF file (max 50MB)</div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="content-type" class="form-label fw-bold">Output Type</label>
+                                    <select class="form-select" id="content-type" required>
+                                        <option value="mcq">Multiple Choice Questions</option>
+                                        <option value="qa">Question-Answer Pairs</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="question-count" class="form-label fw-bold">Number of Questions</label>
+                                    <input type="number" class="form-control" id="question-count" min="1" max="50" value="10" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="difficulty" class="form-label fw-bold">Difficulty Level</label>
+                                <select class="form-select" id="difficulty">
+                                    <option value="easy">Easy</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" id="generate-btn" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-magic me-2"></i> Generate Content
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="result-section">
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card p-3">
+                        <h5 class="card-title mb-3">Document Preview</h5>
+                        <div class="preview-container">
+                            <embed id="pdf-preview" src="" width="100%" height="100%" type="application/pdf">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6 mb-4">
+                    <div class="card p-4 result-card">
+                        <div id="loader" class="text-center">
+                            <i class="fas fa-spinner fa-spin font-large mb-3" style="color: #6c63ff;"></i>
+                            <h4>Processing your document...</h4>
+                            <p class="text-muted">This may take a few moments depending on the document size</p>
+                        </div>
+                        
+                        <div id="result-content" style="display: none;">
+                            <h4 class="mb-4">Generated Content Preview</h4>
+                            <div id="content-preview" class="mb-4" style="max-height: 400px; overflow-y: auto;"></div>
+                            
+                            <div class="d-flex justify-content-between mt-auto">
+                                <a href="#" id="download-csv" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-csv me-2"></i> Download CSV
+                                </a>
+                                <a href="#" id="download-pdf" class="btn btn-primary">
+                                    <i class="fas fa-file-pdf me-2"></i> Download PDF
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://kit.fontawesome.com/1da99de032.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadForm = document.getElementById('upload-form');
+        const pdfFileInput = document.getElementById('pdf-file');
+        const resultSection = document.getElementById('result-section');
+        const loader = document.getElementById('loader');
+        const resultContent = document.getElementById('result-content');
+        const contentPreview = document.getElementById('content-preview');
+        const pdfPreview = document.getElementById('pdf-preview');
+        const downloadCsv = document.getElementById('download-csv');
+        const downloadPdf = document.getElementById('download-pdf');
+
+        const MAX_FILE_SIZE_MB = 50;
+        const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+        
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const file = pdfFileInput.files[0];
+            const contentType = document.getElementById('content-type').value;
+            const questionCount = document.getElementById('question-count').value;
+            const difficulty = document.getElementById('difficulty').value;
+            
+            if (!file) {
+                showAlert('warning', 'No File Selected', 'Please select a PDF file to upload.');
+                return;
+            }
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                showAlert('warning', 'File Too Large', 
+                `File exceeds ${MAX_FILE_SIZE_MB}MB limit. Please choose a smaller file.`);
+                return;
+            }
+
+            try {
+                // Show processing state
+                resultSection.style.display = "block";
+                loader.style.display = "block";
+                resultContent.style.display = "none";
+                
+                // 1. Upload the file
+                const uploadFormData = new FormData();
+                uploadFormData.append('pdf_file', file);
+                uploadFormData.append('content_type', contentType);
+                uploadFormData.append('question_count', questionCount);
+                uploadFormData.append('difficulty', difficulty);
+                
+                const uploadResponse = await fetch('/upload', {
+                    method: 'POST',
+                    body: uploadFormData
+                });
+                
+                const uploadData = await uploadResponse.json();
+                
+                if (!uploadResponse.ok || uploadData.status !== 'success') {
+                    throw new Error(uploadData.message || 'File upload failed');
+                }
+
+                // 2. Show uploaded PDF preview (add timestamp to prevent caching)
+                const previewPath = uploadData.pdf_path + '?t=' + new Date().getTime();
+                pdfPreview.setAttribute('src', previewPath);
+                
+                // 3. Analyze the file
+                const analyzeFormData = new FormData();
+                analyzeFormData.append('pdf_path', uploadData.pdf_path);
+                analyzeFormData.append('content_type', contentType);
+                analyzeFormData.append('question_count', questionCount);
+                analyzeFormData.append('difficulty', difficulty);
+                
+                const analyzeResponse = await fetch('/analyze', {
+                    method: 'POST',
+                    body: analyzeFormData
+                });
+                
+                const analyzeData = await analyzeResponse.json();
+                
+                if (!analyzeResponse.ok || analyzeData.status !== 'success') {
+                    throw new Error(analyzeData.message || 'Analysis failed');
+                }
+
+                // 4. Show results
+                loader.style.display = "none";
+                resultContent.style.display = "block";
+                
+                // Set download links
+                downloadCsv.setAttribute('href', analyzeData.output_files.csv);
+                downloadCsv.setAttribute('download', contentType === 'mcq' ? 'mcqs.csv' : 'qa_pairs.csv');
+                
+                downloadPdf.setAttribute('href', analyzeData.output_files.pdf);
+                downloadPdf.setAttribute('download', contentType === 'mcq' ? 'mcqs.pdf' : 'qa_pairs.pdf');
+                
+                // Display content preview
+                renderContentPreview(analyzeData.content, contentType);
+
+            } catch (error) {
+                console.error('Error:', error);
+                loader.style.display = "none";
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message || 'An error occurred during processing',
+                    confirmButtonColor: "#6c63ff"
+                });
+            }
+        });
+
+        function renderContentPreview(content, contentType) {
+            contentPreview.innerHTML = '';
+            
+            if (contentType === 'mcq') {
+                content.forEach((mcq, index) => {
+                    const mcqElement = document.createElement('div');
+                    mcqElement.className = 'mb-4 p-3 border rounded';
+                    
+                    const questionElement = document.createElement('h5');
+                    questionElement.textContent = `${index + 1}. ${mcq.question}`;
+                    mcqElement.appendChild(questionElement);
+                    
+                    const optionsList = document.createElement('div');
+                    optionsList.className = 'ms-3';
+                    
+                    mcq.options.forEach(option => {
+                        const optionElement = document.createElement('div');
+                        optionElement.className = option.correct ? 'text-success fw-bold' : '';
+                        optionElement.textContent = `${option.letter}) ${option.text}`;
+                        optionsList.appendChild(optionElement);
+                    });
+                    
+                    mcqElement.appendChild(optionsList);
+                    contentPreview.appendChild(mcqElement);
+                });
+            } else {
+                content.forEach((qa, index) => {
+                    const qaElement = document.createElement('div');
+                    qaElement.className = 'mb-4 p-3 border rounded';
+                    
+                    const questionElement = document.createElement('h5');
+                    questionElement.textContent = `${index + 1}. ${qa.question}`;
+                    qaElement.appendChild(questionElement);
+                    
+                    const answerElement = document.createElement('div');
+                    answerElement.className = 'ms-3 p-2 bg-light rounded';
+                    answerElement.textContent = qa.answer;
+                    qaElement.appendChild(answerElement);
+                    
+                    contentPreview.appendChild(qaElement);
+                });
+            }
+        }
+
+        function showAlert(icon, title, text) {
+            Swal.fire({
+                icon: icon,
+                title: title,
+                text: text,
+                confirmButtonColor: "#6c63ff"
+            });
+        }
+    });
+    </script>
+</body>
+</html>  -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Question Paper Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .gradient-header {
+            background: linear-gradient(135deg, #8F00FF 0%, #9d50bb 100%);
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+        .preview-container {
+            height: 600px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+        }
+        .btn-primary {
+            background-color: #6e48aa;
+            border-color: #6e48aa;
+        }
+        .btn-primary:hover {
+            background-color: #5d3d9f;
+            border-color: #5d3d9f;
+        }
+        #result-section {
+            display: none;
+        }
+        .spinner-large {
+            width: 5rem;
+            height: 5rem;
+        }
+        .question-paper {
+            font-family: 'Times New Roman', Times, serif;
+            padding: 20px;
+        }
+        .paper-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .exam-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .section-title {
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            text-decoration: underline;
+        }
+        .question {
+            margin-bottom: 15px;
+        }
+        .marks-info {
+            float: right;
+        }
+        .mcq-option {
+            margin-left: 20px;
+        }
+        .question-controls {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .section-controls {
+            margin-bottom: 15px;
+        }
+        .add-section-btn {
+            margin-top: 10px;
+        }
+        #pdf-upload-section {
+            transition: all 0.3s ease;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header class="gradient-header text-white py-4 mb-4">
+        <div class="container">
+            <div class="text-center">
+                <h1><i class="fas fa-file-alt me-2"></i> Advanced Question Paper Generator</h1>
+                <p class="lead">Create customized question papers with MCQ and descriptive questions</p>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mb-5">
+        <section class="mb-4">
+            <div class="row justify-content-center">
+                <div class="col-lg-10">
+                    <div class="card p-4">
+                        <form id="paper-form">
+                            <!-- Add PDF Upload Section -->
+                            <div class="mb-3">
+                                <label for="source-type" class="form-label fw-bold">Question Source</label>
+                                <select class="form-select" id="source-type" required>
+                                    <option value="manual">Manual Entry</option>
+                                    <option value="pdf">Upload PDF</option>
+                                </select>
+                            </div>
+
+                            <div id="pdf-upload-section" class="mb-3" style="display: none;">
+                                <label for="pdf-file" class="form-label fw-bold">PDF File</label>
+                                <input class="form-control" type="file" id="pdf-file" accept=".pdf">
+                                <div class="form-text">Upload a PDF to generate questions automatically</div>
+                                
+                                <div class="row mt-2">
+                                    <div class="col-md-6">
+                                        <label for="difficulty" class="form-label fw-bold">Difficulty Level</label>
+                                        <select class="form-select" id="difficulty">
+                                            <option value="easy">Easy</option>
+                                            <option value="medium" selected>Medium</option>
+                                            <option value="hard">Hard</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="auto-question-count" class="form-label fw-bold">Number of Questions</label>
+                                        <input type="number" class="form-control" id="auto-question-count" value="10" min="1" max="50">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Existing Form Fields -->
+                            <div class="mb-3">
+                                <label for="institution-name" class="form-label fw-bold">School/College Name</label>
+                                <input type="text" class="form-control" id="institution-name" value="ABC Public School" required>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="exam-type" class="form-label fw-bold">Exam Type</label>
+                                    <select class="form-select" id="exam-type" required>
+                                        <option value="Mid Term Examination">Mid Term Exam</option>
+                                        <option value="End Term Examination">End Term Exam</option>
+                                        <option value="Annual Examination" selected>Annual Examination</option>
+                                        <option value="Unit Test">Unit Test</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="year" class="form-label fw-bold">Year</label>
+                                    <input type="text" class="form-control" id="year" value="2023-2024" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="course-name" class="form-label fw-bold">Course/Class Name</label>
+                                <input type="text" class="form-control" id="course-name" value="Biology (056)" required>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="time-duration" class="form-label fw-bold">Time Duration</label>
+                                    <input type="text" class="form-control" id="time-duration" value="3 hrs" required>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="total-marks" class="form-label fw-bold">Total Marks</label>
+                                    <input type="number" class="form-control" id="total-marks" value="80" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="instructions" class="form-label fw-bold">General Instructions</label>
+                                <textarea class="form-control" id="instructions" rows="3">1. All questions are compulsory.
+                                    2. Figures to the right indicate full marks.
+                                    3. For each MCQ, correct answer must be written along with its alphabet.</textarea>
+                            </div>
+                            
+                            <h4 class="mt-4 mb-3">Question Paper Sections</h4>
+                            <div id="sections-container">
+                                <!-- Sections will be added here dynamically -->
+                            </div>
+                            
+                            <button type="button" id="add-section-btn" class="btn btn-outline-primary add-section-btn">
+                                <i class="fas fa-plus me-2"></i> Add Section
+                            </button>
+                            
+                            <div class="d-grid mt-4">
+                                <button type="submit" id="generate-btn" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-file-alt me-2"></i> Generate Question Paper
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="result-section">
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card p-4">
+                        <div class="d-flex justify-content-between mb-3">
+                            <h4 class="mb-0">Generated Question Paper</h4>
+                            <div>
+                                <button id="download-pdf" class="btn btn-primary">
+                                    <i class="fas fa-file-pdf me-2"></i> Download PDF
+                                </button>
+                                <button id="copy-text" class="btn btn-secondary ms-2">
+                                    <i class="fas fa-copy me-2"></i> Copy Text
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="paper-preview" class="question-paper border p-4">
+                            <!-- Preview will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Section Template (hidden) -->
+    <template id="section-template">
+        <div class="section-controls card p-3 mb-3">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Section Name</label>
+                    <input type="text" class="form-control section-name" value="Section A" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Section Instructions</label>
+                    <input type="text" class="form-control section-instructions" value="All questions are compulsory.">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Marks per Question</label>
+                    <input type="number" class="form-control marks-per-question" value="1" min="1" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" class="btn btn-danger btn-sm remove-section w-100">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>
+                </div>
+            </div>
+            
+            <div class="question-types mt-3">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">MCQ Questions</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control mcq-count" value="5" min="0" placeholder="Number of MCQs">
+                            <button type="button" class="btn btn-outline-secondary preview-mcq" data-bs-toggle="tooltip" title="Preview MCQ Format">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Descriptive Questions</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control desc-count" value="5" min="0" placeholder="Number of Questions">
+                            <button type="button" class="btn btn-outline-secondary preview-desc" data-bs-toggle="tooltip" title="Preview Question Format">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <div id="questions-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize tooltips
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Add first section by default
+            addSection();
+            
+            // Add section button
+            document.getElementById('add-section-btn').addEventListener('click', addSection);
+            
+            // Toggle PDF upload section
+            document.getElementById('source-type').addEventListener('change', function() {
+                const pdfSection = document.getElementById('pdf-upload-section');
+                pdfSection.style.display = this.value === 'pdf' ? 'block' : 'none';
+            });
+            
+            // Form submission handler
+            document.getElementById('paper-form').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const submitBtn = document.getElementById('generate-btn');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating...';
+                
+                try {
+                    // Prepare paper data
+                    const paperData = {
+                        institution: document.getElementById('institution-name').value,
+                        examType: document.getElementById('exam-type').value,
+                        year: document.getElementById('year').value,
+                        course: document.getElementById('course-name').value,
+                        time: document.getElementById('time-duration').value,
+                        marks: parseInt(document.getElementById('total-marks').value),
+                        instructions: document.getElementById('instructions').value,
+                        sections: Array.from(document.querySelectorAll('.section-controls')).map(section => ({
+                            name: section.querySelector('.section-name').value,
+                            instructions: section.querySelector('.section-instructions').value,
+                            marksPerQuestion: parseInt(section.querySelector('.marks-per-question').value),
+                            mcqCount: parseInt(section.querySelector('.mcq-count').value),
+                            descCount: parseInt(section.querySelector('.desc-count').value)
+                        })),
+                        autoGeneratedQuestions: [] // Will be populated from PDF processing if needed
+                    };
+        
+                    // Process PDF if selected
+                    const sourceType = document.getElementById('source-type').value;
+                    if (sourceType === 'pdf') {
+                        const pdfFile = document.getElementById('pdf-file').files[0];
+                        if (!pdfFile) {
+                            throw new Error('Please upload a PDF file');
+                        }
+        
+                        // Create FormData for file upload
+                        const pdfFormData = new FormData();
+                        pdfFormData.append('pdf_file', pdfFile);
+                        pdfFormData.append('difficulty', document.getElementById('difficulty').value);
+                        pdfFormData.append('question_count', document.getElementById('auto-question-count').value);
+        
+                        // Process PDF first
+                        const processResponse = await fetch('/process-pdf', {
+                            method: 'POST',
+                            body: pdfFormData
+                        });
+        
+                        if (!processResponse.ok) {
+                            const error = await processResponse.json();
+                            throw new Error(error.detail || 'PDF processing failed');
+                        }
+        
+                        const processResult = await processResponse.json();
+                        paperData.autoGeneratedQuestions = processResult.questions || [];
+                    }
+        
+                    // Generate the paper
+                    const response = await fetch('/generate-paper', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(paperData)
+                    });
+        
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Paper generation failed');
+                    }
+        
+                    const paperResult = await response.json();
+                    
+                    // Display the generated paper
+                    document.getElementById('paper-preview').innerHTML = paperResult.html_content;
+                    document.getElementById('result-section').style.display = 'block';
+                    
+                    // Scroll to result
+                    document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        title: 'Generation Failed',
+                        text: error.message,
+                        icon: 'error'
+                    });
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-file-alt me-2"></i> Generate Question Paper';
+                }
+            });
+        
+            // PDF download functionality
+            document.getElementById('download-pdf').addEventListener('click', async function(e) {
+                e.preventDefault();
+                
+                const content = document.getElementById('paper-preview').innerHTML;
+                
+                try {
+                    const response = await fetch('/generate-pdf', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ html_content: content })
+                    });
+        
+                    if (!response.ok) {
+                        throw new Error('PDF generation failed');
+                    }
+        
+                    const result = await response.json();
+                    
+                    // Download the PDF
+                    window.open(result.pdf_url, '_blank');
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        title: 'Error!',
+                        text: 'Failed to generate PDF: ' + error.message,
+                        icon: 'error'
+                    });
+                }
+            });
+        
+            // Add a new section
+            function addSection() {
+                const template = document.getElementById('section-template');
+                const clone = template.content.cloneNode(true);
+                const sectionContainer = document.getElementById('sections-container');
+                
+                // Add remove event listener
+                clone.querySelector('.remove-section').addEventListener('click', function() {
+                    if (document.querySelectorAll('.section-controls').length > 1) {
+                        this.closest('.section-controls').remove();
+                    } else {
+                        Swal.fire({
+                            title: 'Cannot Remove',
+                            text: 'You must have at least one section',
+                            icon: 'warning'
+                        });
+                    }
+                });
+                
+                // Add preview event listeners
+                clone.querySelector('.preview-mcq').addEventListener('click', previewMCQFormat);
+                clone.querySelector('.preview-desc').addEventListener('click', previewDescFormat);
+                
+                sectionContainer.appendChild(clone);
+            }
+            
+            // Preview MCQ format
+            function previewMCQFormat() {
+                const section = this.closest('.section-controls');
+                const marks = section.querySelector('.marks-per-question').value;
+                
+                Swal.fire({
+                    title: 'MCQ Question Format',
+                    html: `<div class="text-start">
+                        <p><strong>Sample MCQ Question:</strong></p>
+                        <p>1. Which of the following is not a function of the liver? <span class="float-end">[${marks} Mark${marks > 1 ? 's' : ''}]</span></p>
+                        <div class="mcq-option">
+                            <p>a) Production of bile</p>
+                            <p>b) Storage of glycogen</p>
+                            <p>c) Detoxification</p>
+                            <p>d) Production of insulin</p>
+                        </div>
+                        <p class="mt-2"><em>This is how your MCQ questions will appear in the paper.</em></p>
+                    </div>`,
+                    icon: 'info'
+                });
+            }
+            
+            // Preview Descriptive format
+            function previewDescFormat() {
+                const section = this.closest('.section-controls');
+                const marks = section.querySelector('.marks-per-question').value;
+                
+                Swal.fire({
+                    title: 'Descriptive Question Format',
+                    html: `<div class="text-start">
+                        <p><strong>Sample Descriptive Question:</strong></p>
+                        <p>1. Explain the process of photosynthesis in plants. <span class="float-end">[${marks} Mark${marks > 1 ? 's' : ''}]</span></p>
+                        <p class="mt-2"><em>This is how your descriptive questions will appear in the paper.</em></p>
+                    </div>`,
+                    icon: 'info'
+                });
+            }
+            
+            // Copy text functionality
+            document.getElementById('copy-text').addEventListener('click', function(e) {
+                e.preventDefault();
+                const previewDiv = document.getElementById('paper-preview');
+                const range = document.createRange();
+                range.selectNode(previewDiv);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                
+                Swal.fire({
+                    title: 'Copied!',
+                    text: 'Question paper text has been copied to clipboard',
+                    icon: 'success',
+                    timer: 2000
+                });
+            });
+        });
+        </script> 
+</body>
+</html>
