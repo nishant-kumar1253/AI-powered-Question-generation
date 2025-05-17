@@ -1,5 +1,6 @@
 AI-Powered Question-Answer Generation with Mistral 7B Instruct
-🔍 Overview
+
+
 This project leverages Mistral 7B Instruct from Hugging Face to automatically generate question-answer (QA) pairs from documents. It features:
 
 A FastAPI backend for inference and document handling.
